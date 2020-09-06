@@ -1,0 +1,8 @@
+#compdef en
+
+
+__nginx_get_en_command_list () {
+    ls -a $NGINX_DIR/sites-available | awk '/^[a-z][a-z.-]+$/ { print $1 }'
+}
+
+compadd `__nginx_get_en_command_list`

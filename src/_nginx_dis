@@ -1,0 +1,8 @@
+#compdef dis
+
+__nginx_get_dis_command_list () {
+    ls -a $NGINX_DIR/sites-enabled | awk '/^[a-z][a-z.-]+$/ { print $1 }'
+}
+
+compadd `_nginx_get_dis_command_list`
+

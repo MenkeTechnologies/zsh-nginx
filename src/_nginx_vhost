@@ -1,0 +1,8 @@
+#compdef vhost
+
+# Completition of vhost
+__nginx_get_possible_vhost_list () {
+    ls -a $HOME/www | awk '/^[^.][a-z0-9._]+$/ { print $1 }'
+}
+
+compadd `_nginx_get_possible_vhost_list`
