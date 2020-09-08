@@ -1,4 +1,13 @@
 # zsh-nginx
+
+## Install for Zinit
+> `~/.zshrc`
+```sh
+source "$HOME/.zinit/bin/zinit.zsh"
+zinit ice lucid nocompile
+zinit load MenkeTechnologies/zsh-nginx
+```
+
 ## Install for Oh My Zsh
 
 ```sh
