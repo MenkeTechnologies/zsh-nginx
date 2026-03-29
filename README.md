@@ -1,4 +1,5 @@
 # zsh-nginx
+[![CI](https://github.com/MenkeTechnologies/zsh-nginx/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-nginx/actions/workflows/ci.yml)
 
 ## Install for Zinit
 > `~/.zshrc`
