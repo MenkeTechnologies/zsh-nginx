@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="zsh-nginx — Engineering report. 246-LOC zsh plugin: 2 nginx service aliases (ngt / ngr), 3 site-management fns (en / dis / vhost), 3 sites-available/sites-enabled-driven completions, 2 vhost templates (symfony2 / plain_php), 28 zunit @test cases.">
+  <title>zsh-nginx &mdash; Engineering Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&amp;family=Share+Tech+Mono&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hud-static.css">
+  <link rel="stylesheet" href="tutorial.css">
+  <style>
+    .tutorial-main { max-width: 72rem; }
+    .bar-wrap { background:var(--bg-primary);border:1px solid var(--border);border-radius:2px;height:18px;position:relative;overflow:hidden; }
+    .bar-fill { height:100%;border-radius:1px;transition:width 1.2s cubic-bezier(.22,1,.36,1); }
+    .bar-fill.green  { background:linear-gradient(90deg,#39ff14,#20c00a);box-shadow:0 0 8px rgba(57,255,20,.4); }
+    .bar-fill.cyan   { background:linear-gradient(90deg,#05d9e8,#0891b2);box-shadow:0 0 8px rgba(5,217,232,.4); }
+    .bar-fill.yellow { background:linear-gradient(90deg,#ffb800,#e8a000);box-shadow:0 0 8px rgba(255,184,0,.35); }
+    .bar-fill.magenta{ background:linear-gradient(90deg,#d300c5,#a000a0);box-shadow:0 0 8px rgba(211,0,197,.35); }
+    .bar-pct { position:absolute;right:6px;top:0;line-height:18px;font-size:10px;font-weight:700;color:#fff;text-shadow:0 0 4px #000;font-family:'Orbitron',sans-serif; }
+    .file-table { width:100%;border-collapse:collapse;margin:0.6rem 0;font-size:12px; }
+    .file-table th { background:var(--bg-secondary);color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;text-align:left;padding:7px 10px;border:1px solid var(--border); }
+    .file-table td { padding:6px 10px;border:1px solid var(--border);color:var(--text-dim);vertical-align:middle; }
+    .file-table tr:hover td { background:var(--bg-hover); }
+    .file-table td:first-child { font-family:'Share Tech Mono',monospace;color:var(--accent-light);font-weight:600;white-space:nowrap; }
+    .file-table .num { text-align:right;font-family:'Share Tech Mono',monospace; }
+    .file-table .total-row td { background:var(--bg-secondary);font-weight:700;color:var(--text);border-top:2px solid var(--cyan); }
+    .file-table code { font-size:11px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    .stat-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:0.75rem;margin:1.2rem 0; }
+    .stat-card { border:1px solid var(--border);border-top:3px solid var(--cyan);background:var(--bg-card);padding:1rem 1.2rem;border-radius:2px;text-align:center; }
+    .stat-card .stat-val { font-family:'Orbitron',sans-serif;font-size:26px;font-weight:900;color:var(--cyan);line-height:1.1;text-shadow:0 0 20px var(--cyan-glow); }
+    .stat-card .stat-val.accent { color:var(--accent);text-shadow:0 0 20px var(--accent-glow); }
+    .stat-card .stat-val.green  { color:var(--green);text-shadow:0 0 20px rgba(57,255,20,.3); }
+    .stat-card .stat-label { font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-top:0.5rem; }
+    @keyframes glow-pulse { 0%,100%{text-shadow:0 0 20px var(--cyan-glow)}50%{text-shadow:0 0 40px var(--cyan-glow),0 0 80px var(--cyan-dim)} }
+    .stat-card .stat-val { animation:glow-pulse 3s ease-in-out infinite; }
+    .mapping-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(20rem,1fr));gap:0.65rem;margin:0.8rem 0; }
+    .mapping-card { border:1px solid var(--border);border-left:3px solid var(--magenta);background:var(--bg-card);padding:0.6rem 0.9rem;border-radius:2px; }
+    .mapping-card h4 { font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--magenta);margin:0 0 0.3rem; }
+    .mapping-card p { margin:0;font-size:11px;color:var(--text-dim);line-height:1.5; }
+    .mapping-card code { font-size:10.5px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    .section-rule { border:none;border-top:1px dashed var(--border);margin:2rem 0; }
+    .feature-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));gap:0.65rem;margin:0.8rem 0; }
+    .feature-card { border:1px solid var(--border);border-left:3px solid var(--cyan);background:var(--bg-card);padding:0.7rem 1rem;border-radius:2px; }
+    .feature-card h4 { font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin:0 0 0.3rem; }
+    .feature-card p { margin:0;font-size:11px;color:var(--text-dim);line-height:1.55; }
+    .feature-card code { font-size:10.5px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    pre.config { margin:0.5rem 0;padding:1rem;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-dim);font-size:11px;line-height:1.55;overflow-x:auto;font-family:'Share Tech Mono',monospace; }
+  </style>
+</head>
+<body>
+  <div class="app tutorial-app" id="reportApp">
+    <div class="crt-scanline" id="crtH" aria-hidden="true"></div>
+    <div class="crt-scanline-v" id="crtV" aria-hidden="true"></div>
+
+    <header class="tutorial-header">
+      <div class="tutorial-header-inner">
+        <div>
+          <h1 class="tutorial-brand">// ZSH-NGINX &mdash; ENGINEERING REPORT</h1>
+          <nav class="tutorial-crumbs" aria-label="Breadcrumb">
+            <span class="current">Engineering Report</span>
+            <span class="sep">/</span>
+            <a href="index.html">Docs</a>
+            <span class="sep">/</span>
+            <a href="https://github.com/MenkeTechnologies/zsh-nginx" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <span class="sep">/</span>
+            <a href="https://github.com/MenkeTechnologies/zpwr" target="_blank" rel="noopener noreferrer">zpwr</a>
+          </nav>
+          <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.75;">
+            zsh plugin &middot; nginx vhost lifecycle &middot; <code>en</code>/<code>dis</code>/<code>vhost</code> &middot; 2 service aliases (<code>ngt</code>/<code>ngr</code>) &middot; sites-available + sites-enabled completion &middot; 2 vhost templates
+          </p>
+        </div>
+        <div class="tutorial-toolbar">
+          <button type="button" class="btn btn-secondary" id="btnTheme" title="Toggle light/dark">Theme</button>
+          <button type="button" class="btn btn-secondary active" id="btnCrt" title="CRT scanline overlay">CRT</button>
+          <button type="button" class="btn btn-secondary active" id="btnNeon" title="Neon border pulse">Neon</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="tutorial-main">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 1: EXECUTIVE SUMMARY           -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>EXECUTIVE SUMMARY</h2>
+      <p class="tutorial-subtitle">zsh-nginx is the vhost-lifecycle plugin for the Debian/Ubuntu nginx layout: <code>$NGINX_DIR/sites-available/</code> stores configs, <code>$NGINX_DIR/sites-enabled/</code> is a symlink farm pointing into the available tree. Three autoloaded zsh functions (<code>en</code>, <code>dis</code>, <code>vhost</code>) plus two service aliases (<code>ngt</code> for config-test, <code>ngr</code> for restart) cover the standard "create vhost &rarr; enable it &rarr; reload nginx" loop. Each function ships a paired <code>#compdef</code> completion driven by <code>ls</code> over the relevant <code>sites-*</code> directory &mdash; completion candidates are always real on-disk files, never a hand-maintained list that can drift. The <code>vhost</code> generator <code>sed</code>-substitutes <code>{vhost}/{user}/{pool_port}</code> into one of two templates (Symfony2 fastcgi or plain PHP-FPM) and optionally writes an <code>/etc/hosts</code> entry &mdash; turning a new vhost into a single command.</p>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-val">246</div><div class="stat-label">Plugin LOC</div></div>
+        <div class="stat-card"><div class="stat-val accent">3</div><div class="stat-label">Autoload Fns</div></div>
+        <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Service Aliases</div></div>
+        <div class="stat-card"><div class="stat-val">3</div><div class="stat-label">Completions</div></div>
+        <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Vhost Templates</div></div>
+        <div class="stat-card"><div class="stat-val green">28</div><div class="stat-label">zunit @test Cases</div></div>
+        <div class="stat-card"><div class="stat-val">21</div><div class="stat-label">Docs/Repo Gates</div></div>
+        <div class="stat-card"><div class="stat-val">28</div><div class="stat-label">Git Commits</div></div>
+      </div>
+
+      <div style="margin:1.2rem 0;">
+        <p style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:700;">Plugin Source &mdash; 246 LOC</p>
+        <div class="bar-wrap" style="height:24px;">
+          <div class="bar-fill cyan" style="width:60%;"></div>
+          <span class="bar-pct" style="font-size:12px;">147 autoload fns / 54 templates / 24 completions / 21 entrypoint</span>
+        </div>
+        <p style="font-size:10px;color:var(--text-muted);margin-top:4px;">Functions (<code>autoload/en</code>, <code>dis</code>, <code>vhost</code>) carry 147 LOC of the 246-LOC total. The <code>vhost</code> file is 102 LOC alone &mdash; it embeds its own usage banner, template resolution, getopts argument parsing, and the <code>_write_hosts</code> helper that splices a 127.0.0.1 mapping into <code>/etc/hosts</code>.</p>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 2: FILE STRUCTURE              -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">#</span>FILE STRUCTURE</h2>
+      <p class="tutorial-subtitle">Three slices: <code>autoload/</code> for the user-facing fns, <code>src/</code> for the matching completions (one <code>#compdef</code> per fn), <code>templates/</code> for the nginx config skeletons. The entrypoint registers both directories on <code>fpath</code> (autoload + completion) so a single source line covers the full surface.</p>
+
+      <table class="file-table">
+        <thead><tr><th>File</th><th class="num">Lines</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>autoload/vhost</td><td class="num">102</td><td>Vhost generator + <code>_vhost_usage</code>, <code>_vhost_generate</code>, <code>_write_hosts</code> helpers; getopts <code>-l/-u/-t/-n/-w/-h</code> parser; sed-substitutes <code>{vhost}/{user}/{pool_port}</code> into the chosen template; optional <code>en</code> auto-call + <code>/etc/hosts</code> write</td></tr>
+          <tr><td>autoload/en</td><td class="num">25</td><td>Enable site: <code>ln -s $NGINX_DIR/sites-available/$1 $NGINX_DIR/sites-enabled/$1</code> with pre-check (must exist in available) and post-check (must materialise in enabled); colorized status output</td></tr>
+          <tr><td>autoload/dis</td><td class="num">20</td><td>Disable site: <code>rm -f $NGINX_DIR/sites-enabled/$1</code> with the same pre/post-condition contract as <code>en</code></td></tr>
+          <tr><td>zsh-nginx.plugin.zsh</td><td class="num">21</td><td>Entrypoint: <code>$NGINX_DIR</code>/<code>$NGINX_VHOST_TEMPLATE</code> defaults, sudo probe, <code>ngt</code>/<code>ngr</code> aliases, <code>fpath</code> append for both <code>src/</code> and <code>autoload/</code>, autoload fn registration</td></tr>
+          <tr><td>templates/symfony2</td><td class="num">27</td><td>Symfony2 vhost template: web/ root, <code>app_dev.php</code> front controller, fastcgi-pass over <code>unix:/var/run/php5-fpm.{user}.socket</code>, <code>.ht</code> deny</td></tr>
+          <tr><td>templates/plain_php</td><td class="num">27</td><td>Plain PHP vhost template: <code>index.php</code> root, simple try-files, fastcgi-pass over the same per-user PHP-FPM socket, <code>.ht</code> deny</td></tr>
+          <tr><td>src/_nginx_en</td><td class="num">8</td><td><code>#compdef en</code>: <code>compadd</code> with output of <code>ls -a $NGINX_DIR/sites-available</code> filtered by <code>awk '/^[a-z][a-z.-]+$/'</code></td></tr>
+          <tr><td>src/_nginx_dis</td><td class="num">8</td><td><code>#compdef dis</code>: same shape but listing <code>sites-enabled</code></td></tr>
+          <tr><td>src/_nginx_vhost</td><td class="num">8</td><td><code>#compdef vhost</code>: lists <code>$HOME/www/</code> entries as candidates (the &ldquo;repos that could become vhosts&rdquo; set)</td></tr>
+        </tbody>
+        <tfoot><tr class="total-row"><td>9 source files</td><td class="num">246</td><td>3 fn + 1 entrypoint + 3 completions + 2 templates</td></tr></tfoot>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 3: SURFACE                     -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">$</span>USER SURFACE</h2>
+      <p class="tutorial-subtitle">Five callable names. The plugin lives in the user's interactive shell; nothing runs at source time except env-var defaults + the <code>sudo</code> probe + 2 alias definitions + <code>fpath</code> append + <code>autoload -Uz</code>. First call to <code>en</code>/<code>dis</code>/<code>vhost</code> triggers the actual fn body via zsh's autoload machinery.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Name</th><th>Kind</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>ngt</td><td>alias</td><td><code>$sudo nginx -t</code> &mdash; config syntax test</td></tr>
+          <tr><td>ngr</td><td>alias</td><td><code>$sudo service nginx restart</code> &mdash; service restart</td></tr>
+          <tr><td>en NAME</td><td>fn</td><td>Symlink <code>$NGINX_DIR/sites-available/NAME</code> into <code>$NGINX_DIR/sites-enabled/</code></td></tr>
+          <tr><td>dis NAME</td><td>fn</td><td>Remove <code>$NGINX_DIR/sites-enabled/NAME</code></td></tr>
+          <tr><td>vhost [-l] [-u USER] [-t TPL] [-n] [-w] [-h] NAME</td><td>fn</td><td>Generate a vhost config from <code>$NGINX_VHOST_TEMPLATE</code> (or <code>-t TPL</code>), drop into <code>sites-available/NAME</code>, optionally <code>en</code> it (<code>-n</code> to skip) and optionally splice <code>NAME</code> into <code>/etc/hosts</code> (<code>-w</code>)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.5rem 0 0.5rem;">// VHOST FLAGS</h3>
+      <table class="file-table">
+        <thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>-l</td><td>(off)</td><td>List enabled vhosts (<code>ls $NGINX_DIR/sites-enabled</code>); short-circuits before generation</td></tr>
+          <tr><td>-u USER</td><td><code>$USER</code></td><td>Set the owning user for fastcgi socket + web root resolution; looked up in <code>/etc/passwd</code></td></tr>
+          <tr><td>-t TPL</td><td><code>$NGINX_VHOST_TEMPLATE</code></td><td>Template name (looks in <code>$ZSH/plugins/nginx/templates/$TPL</code> first, then accepts a raw path)</td></tr>
+          <tr><td>-n</td><td>(enable)</td><td>Generate-only; skip the trailing <code>en</code> auto-call</td></tr>
+          <tr><td>-w</td><td>(off)</td><td>Append a <code>127.0.0.1 NAME</code> mapping to <code>/etc/hosts</code> for local-only DNS</td></tr>
+          <tr><td>-h</td><td>n/a</td><td>Print usage and return</td></tr>
+        </tbody>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 4: VHOST PIPELINE              -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">@</span>VHOST PIPELINE</h2>
+      <p class="tutorial-subtitle">From <code>vhost foo.example</code> to a live nginx site in 5 stages. Each stage gates on the previous &mdash; missing user, missing template, or failed enable will short-circuit with a colourised error and leave the system in a consistent state (no half-written config in <code>sites-available</code>, no dangling symlink in <code>sites-enabled</code>).</p>
+
+      <pre class="config">
+  vhost [-u USER] [-t TPL] [-n] [-w] NAME
+       │
+       ▼
+  ┌─────────────────────────┐
+  │ getopts: parse flags    │
+  │   user   ← USER || $USER│
+  │   tmpl   ← TPL  || $NGINX_VHOST_TEMPLATE
+  │   enable ← (no -n)      │
+  │   hosts  ← (-w)         │
+  └─────────┬───────────────┘
+            │
+            ▼
+  ┌─────────────────────────┐
+  │ resolve template path   │
+  │   $ZSH/plugins/nginx/   │
+  │     templates/$TPL      │  ──── or ── raw path ── or ── default ─▶
+  └─────────┬───────────────┘
+            │
+            ▼
+  ┌─────────────────────────┐
+  │ _vhost_generate         │
+  │   user lookup (passwd)  │
+  │   pool_port = "1" + UID │
+  │   sed {vhost}{user}{pool_port}
+  │     → $NAME.tmp         │
+  │   $sudo mv $NAME.tmp    │
+  │     → sites-available/  │
+  └─────────┬───────────────┘
+            │
+            ▼ (if enable)
+  ┌─────────────────────────┐
+  │ en $NAME                │
+  │   ln -s available/$NAME │
+  │      enabled/$NAME      │
+  │   (sudo)                │
+  └─────────┬───────────────┘
+            │
+            ▼ (if -w)
+  ┌─────────────────────────┐
+  │ _write_hosts $NAME      │
+  │   splice "127.0.0.1     │
+  │   $NAME" into first     │
+  │   line of /etc/hosts    │
+  └─────────────────────────┘
+            │
+            ▼
+  ┌─────────────────────────┐
+  │ ngt && ngr              │ ← user-driven, not auto
+  │ (verify + reload)       │
+  └─────────────────────────┘</pre>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The pool-port trick (<code>pool_port = "1" + UID</code>) is the canonical multi-tenant PHP-FPM convention: each user gets a fastcgi socket on their own port, derived from <code>/etc/passwd</code> UID. UID 1000 &rarr; pool 11000, UID 1001 &rarr; 11001, etc. The template emits the literal <code>unix:/var/run/php5-fpm.{user}.socket</code> string &mdash; the pool_port is substituted in for templates that use it.</p>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 5: COMPLETION                  -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">&amp;</span>COMPLETION</h2>
+      <p class="tutorial-subtitle">All three completions follow the same 8-line shape: a <code>#compdef</code> directive, an internal helper that runs <code>ls -a</code> against the relevant directory and pipes through <code>awk</code> to filter to lowercase-prefixed names, then <code>compadd `helper`</code> to feed candidates into the completion engine. The point: completion sources are <strong>live filesystem state</strong>, not a hand-maintained list.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Completion</th><th>Source dir</th><th>awk filter</th></tr></thead>
+        <tbody>
+          <tr><td>_nginx_en</td><td><code>$NGINX_DIR/sites-available</code></td><td><code>/^[a-z][a-z.-]+$/</code></td></tr>
+          <tr><td>_nginx_dis</td><td><code>$NGINX_DIR/sites-enabled</code></td><td><code>/^[a-z][a-z.-]+$/</code></td></tr>
+          <tr><td>_nginx_vhost</td><td><code>$HOME/www</code></td><td><code>/^[^.][a-z0-9._]+$/</code></td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The asymmetry is intentional. <code>en</code>'s candidates are <strong>configs that exist but aren't symlinked</strong> (available). <code>dis</code>'s candidates are <strong>configs that are currently active</strong> (enabled). <code>vhost</code>'s candidates are <strong>project directories that don't yet have a vhost</strong> (~/www). Each completion answers exactly the question the user asks; no overlap, no confusion.</p>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 6: TEMPLATES                   -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">~</span>TEMPLATES</h2>
+      <p class="tutorial-subtitle">Two stock templates, both targeting per-user PHP-FPM with a unix-socket fastcgi backend. Both deny <code>.ht*</code> dotfiles (Apache leftovers blocked by convention). Substitution uses <code>{vhost}</code>, <code>{user}</code>, <code>{pool_port}</code> &mdash; a 3-key sed pass. The choice was deliberate: bigger templating systems (mustache, jinja) would force a tool dep on the user's box; sed is in every POSIX install.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>templates/symfony2</h4>
+          <p>Web root <code>/home/{user}/www/{vhost}/web</code>. Front controller <code>app_dev.php</code>. <code>try_files $uri $uri/ /app_dev.php$uri /app_dev.php$is_args$args</code>. Fastcgi handler scoped to <code>~ ^/(app|app_dev|check)\.php(/|$)</code> &mdash; only the canonical Symfony2 entry scripts run PHP. <code>client_max_body_size 10M</code>. Per-vhost error + access logs at <code>/var/log/nginx/{vhost}.{error,access}.log</code>.</p>
+        </div>
+        <div class="feature-card">
+          <h4>templates/plain_php</h4>
+          <p>Web root <code>/home/{user}/www/{vhost}</code> (no nested <code>web/</code>). Front controller <code>index.php</code>. <code>try_files $uri $uri/ $uri/index.php</code>. Fastcgi handler scoped to any <code>\.php$</code> &mdash; classic PHP layout with one entry per script. Same per-vhost logs and PHP-FPM socket as the Symfony template.</p>
+        </div>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 7: TEST COVERAGE                -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">*</span>TEST COVERAGE</h2>
+      <p class="tutorial-subtitle">28 zunit <code>@test</code> cases across 5 test files pin the plugin contract: aliases (<code>ngt</code>/<code>ngr</code>) are defined and reference <code>$sudo</code>; entrypoint defaults <code>$NGINX_DIR</code> and <code>$NGINX_VHOST_TEMPLATE</code> only when unset (idempotent re-source); every autoload fn is defined after sourcing the plugin; every completion has a <code>#compdef</code> directive matching its fn name; every source file parses cleanly under <code>zsh -n</code>. 21 additional <code>.sh</code> doc-hygiene gates pin the README, docs, workflow, and test-file structure.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Test file</th><th class="num">@test</th><th>Pins</th></tr></thead>
+        <tbody>
+          <tr><td>tests/t-aliases.zsh</td><td class="num">6</td><td><code>ngt</code> + <code>ngr</code> alias presence; alias values reference <code>$sudo</code>; alias values mention <code>nginx</code>; sudo probe sets <code>$sudo</code> when <code>sudo</code> is on PATH</td></tr>
+          <tr><td>tests/t-contract2.zsh</td><td class="num">6</td><td>Three autoload fns (<code>en</code>, <code>dis</code>, <code>vhost</code>) are defined after sourcing; <code>autoload/</code> appears on <code>fpath</code>; <code>src/</code> appears on <code>fpath</code></td></tr>
+          <tr><td>tests/t-syntax.zsh</td><td class="num">6</td><td>Every file under <code>autoload/</code> and <code>src/</code> + entrypoint parses under <code>zsh -n</code>; no syntax drift on push</td></tr>
+          <tr><td>tests/t-contract3.zsh</td><td class="num">5</td><td><code>$NGINX_DIR</code> defaults to <code>/etc/nginx</code> when unset; <code>$NGINX_VHOST_TEMPLATE</code> default; existing values are not clobbered on re-source</td></tr>
+          <tr><td>tests/t-contract4.zsh</td><td class="num">5</td><td>Each completion file (<code>_nginx_en</code>, <code>_nginx_dis</code>, <code>_nginx_vhost</code>) starts with <code>#compdef</code> followed by the matching fn name; entrypoint stem matches plugin directory name</td></tr>
+        </tbody>
+        <tfoot><tr class="total-row"><td>5 zunit files</td><td class="num">28</td><td>+ 21 <code>.sh</code> doc-hygiene gates</td></tr></tfoot>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 8: KEY DESIGN DECISIONS         -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">?</span>KEY DESIGN DECISIONS</h2>
+      <p class="tutorial-subtitle">Each call-out is a decision the implementation could have gone either way on, with the rationale for the path taken.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card"><h4>Debian/Ubuntu layout, not Red Hat</h4><p>The <code>sites-available/</code> + <code>sites-enabled/</code> split is a Debian convention &mdash; Red Hat puts every config in <code>/etc/nginx/conf.d/</code>. The plugin standardises on the Debian layout because that's where the symlink semantics make sense; <code>en</code>/<code>dis</code> have nothing useful to do on a flat conf.d setup.</p></div>
+        <div class="feature-card"><h4>Symlink, not move</h4><p><code>en</code> creates a <code>ln -s</code>, not a <code>cp</code> or <code>mv</code>. <code>dis</code> is <code>rm -f</code> against the symlink, not the underlying config. This means <code>dis</code> never destroys the actual file; the user can <code>en</code> again to instantly restore.</p></div>
+        <div class="feature-card"><h4>sed templating</h4><p>3 placeholders, sed-substituted in a single pass. A real templating language would force a tool dep that may not be on the user's nginx host. <code>sed</code> is POSIX, and the 3-key surface is small enough that escaping concerns don't bite.</p></div>
+        <div class="feature-card"><h4>UID-derived pool port</h4><p><code>pool_port = "1" + UID</code> via <code>/etc/passwd</code> lookup. Avoids hand-assigning per-user PHP-FPM ports; the port is deterministic from the system's user database, so two users on the same box can't collide.</p></div>
+        <div class="feature-card"><h4>Completion from filesystem</h4><p>Every <code>#compdef</code> reads <code>ls -a</code> against the relevant directory rather than maintaining a static list. A vhost added by hand outside the plugin still tab-completes; the plugin can never lie about what's actually installed.</p></div>
+        <div class="feature-card"><h4>Optional sudo</h4><p>The entrypoint probes for sudo (<code>which -p sudo</code>) and falls back to empty string when missing. Containers, embedded systems, and root-shells get a working plugin without the sudo prefix; default Linux desktops get the elevation they need to touch <code>/etc/nginx</code>.</p></div>
+        <div class="feature-card"><h4>Two templates</h4><p>One is the historical Symfony 2 layout (web/ root, fastcgi scoped to entry scripts), one is generic PHP (any .php executes). Together they cover the dominant LAMP / Symfony deployment shapes circa the plugin's origin. A user with another framework can drop a custom template into <code>$ZSH/plugins/nginx/templates/</code> and select it with <code>-t</code>.</p></div>
+        <div class="feature-card"><h4>Inline ANSI escapes, not tput</h4><p>Status messages embed raw <code>\033[31m...\033[0m</code> sequences. The plugin runs in interactive zsh on a terminal that supports them; portability to non-terminal contexts isn't a goal. <code>tput</code> would force a <code>termcap</code>/<code>terminfo</code> lookup that isn't needed.</p></div>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 9: COMPAT & DEPS                -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">+</span>COMPAT &amp; DEPS</h2>
+      <p class="tutorial-subtitle">The plugin assumes Debian-style nginx layout (<code>/etc/nginx/sites-available</code> + <code>/etc/nginx/sites-enabled</code>) and per-user PHP-FPM on unix sockets. Anything else is BYO template. Zsh 5.x compat floor &mdash; no zsh 6 features. No build step, no install hook, no compiled output.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Dep</th><th>Hardness</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td>zsh</td><td>hard</td><td>Runtime (5.x+)</td></tr>
+          <tr><td>nginx</td><td>hard</td><td>Target service &mdash; the plugin's reason to exist</td></tr>
+          <tr><td>sed</td><td>hard</td><td>Template substitution in <code>_vhost_generate</code></td></tr>
+          <tr><td>awk</td><td>hard</td><td>Completion filter (<code>ls -a | awk ...</code>) and <code>/etc/passwd</code> field extraction</td></tr>
+          <tr><td>sudo</td><td>soft</td><td>Auto-detected; falls back to direct exec when missing</td></tr>
+          <tr><td>service / systemctl</td><td>soft</td><td><code>ngr</code> uses <code>service nginx restart</code>; on systemd-only boxes, customise the alias</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.5rem 0 0.5rem;">// ENV CONTRACT</h3>
+      <table class="file-table">
+        <thead><tr><th>Env var</th><th>Default</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>NGINX_DIR</td><td><code>/etc/nginx</code></td><td>Root for <code>sites-available/</code> + <code>sites-enabled/</code></td></tr>
+          <tr><td>NGINX_VHOST_TEMPLATE</td><td><code>$ZSH/plugins/nginx/templates/symfony2</code></td><td>Default template when <code>vhost</code> is called without <code>-t</code></td></tr>
+        </tbody>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 10: STRATEGIC POSITION          -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">!</span>STRATEGIC POSITION</h2>
+      <p class="tutorial-subtitle">zsh-nginx is the smallest plugin in the MenkeTechnologies stack but covers a real ops loop: "I want a new local vhost on this dev box, now." Without the plugin, the same loop is ~5 hand-typed commands across <code>cd /etc/nginx/sites-available</code>, <code>sudo cp template foo</code>, <code>sudo vim foo</code>, <code>sudo ln -s ../sites-available/foo ../sites-enabled/foo</code>, and <code>sudo service nginx restart</code>. With the plugin it's <code>vhost foo -w &amp;&amp; ngt &amp;&amp; ngr</code> &mdash; same outcome, three commands, no manual sed.</p>
+
+      <div class="mapping-grid">
+        <div class="mapping-card"><h4>Dev workflow</h4><p>Spin up a vhost for a project in <code>~/www/foo</code>: <code>vhost foo -w</code> generates the config, enables it, and writes <code>127.0.0.1 foo</code> to <code>/etc/hosts</code>. <code>ngt</code> + <code>ngr</code> reload.</p></div>
+        <div class="mapping-card"><h4>Multi-tenant servers</h4><p>The UID-derived pool port + per-user fastcgi socket convention scales to dozens of users on a shared host without port collisions or hand-maintained pool mappings.</p></div>
+        <div class="mapping-card"><h4>CI / provisioning</h4><p>The plugin is a thin shim over <code>ln -s</code> + <code>sed</code> &mdash; safe to call from provisioning scripts. <code>en</code>/<code>dis</code> are idempotent by construction (the symlink either exists or it doesn't).</p></div>
+        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of 5 plugins in the MenkeTechnologies meta repo; the lightest in LOC but the one with the most external system touch (nginx config, <code>/etc/hosts</code>, <code>/etc/passwd</code>, service control).</p></div>
+      </div>
+
+    </main>
+
+    <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
+      ZSH-NGINX ENGINEERING REPORT &middot; 246 PLUGIN LOC &middot; 3 AUTOLOAD FNS &middot; 2 ALIASES &middot; 3 COMPLETIONS &middot; 2 VHOST TEMPLATES &middot; 28 ZUNIT TESTS &middot; 21 DOC GATES &middot; MENKETECHNOLOGIES
+    </footer>
+  </div>
+
+  <script>
+    const html = document.documentElement;
+    const btnTheme = document.getElementById('btnTheme');
+    const btnCrt = document.getElementById('btnCrt');
+    const btnNeon = document.getElementById('btnNeon');
+    const crtH = document.getElementById('crtH');
+    const crtV = document.getElementById('crtV');
+    btnTheme?.addEventListener('click', () => {
+      html.setAttribute('data-theme', html.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+    });
+    btnCrt?.addEventListener('click', () => {
+      btnCrt.classList.toggle('active');
+      const on = btnCrt.classList.contains('active');
+      if (crtH) crtH.style.display = on ? '' : 'none';
+      if (crtV) crtV.style.display = on ? '' : 'none';
+    });
+    btnNeon?.addEventListener('click', () => {
+      btnNeon.classList.toggle('active');
+      document.querySelector('.app')?.classList.toggle('neon-off');
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.bar-fill').forEach(bar => {
+        const w = bar.style.width;
+        bar.style.width = '0';
+        requestAnimationFrame(() => { requestAnimationFrame(() => { bar.style.width = w; }); });
+      });
+    });
+  </script>
+</body>
+</html>
