@@ -68,7 +68,21 @@
 
     <main class="tutorial-main">
       <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>ZSH-NGINX</h2>
-      <p class="tutorial-subtitle"><strong>nginx commands, one tab away.</strong> Tab completion for the <code>nginx</code> binary plus two service-wrapper aliases for the test / restart cycle.</p>
+      <p class="tutorial-subtitle"><strong>nginx vhost lifecycle, one tab away.</strong> A zsh plugin for the Debian/Ubuntu nginx layout (<code>$NGINX_DIR/sites-available/</code> holds configs, <code>$NGINX_DIR/sites-enabled/</code> is a symlink farm). Three autoloaded functions &mdash; <code>en</code>, <code>dis</code>, <code>vhost</code> &mdash; cover create / enable / disable; two aliases &mdash; <code>ngt</code>, <code>ngr</code> &mdash; cover the test / restart cycle; three filesystem-driven completions feed real on-disk site names into <code>&lt;TAB&gt;</code>.</p>
+
+      <section class="tutorial-section">
+        <h2>Overview</h2>
+        <p>zsh-nginx is a single source line that registers a small surface for managing nginx virtual hosts on the Debian-style split layout. Sourcing the plugin sets two environment defaults, probes for <code>sudo</code>, defines the <code>ngt</code> / <code>ngr</code> aliases, prepends <code>src/</code> (completions) and appends <code>autoload/</code> (functions) to <code>fpath</code>, and registers <code>en</code> / <code>dis</code> / <code>vhost</code> via <code>autoload -Uz</code>. Nothing else runs at source time &mdash; the function bodies load lazily on first call. Re-sourcing the plugin is idempotent: the env defaults use <code>: ${VAR:=default}</code> so existing values are never clobbered.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td>en NAME</td><td>Enable a site &mdash; symlink it from <code>sites-available</code> into <code>sites-enabled</code></td></tr>
+            <tr><td>dis NAME</td><td>Disable a site &mdash; remove its <code>sites-enabled</code> symlink (config untouched)</td></tr>
+            <tr><td>vhost &hellip; NAME</td><td>Generate a vhost config from a template, optionally enable it and write <code>/etc/hosts</code></td></tr>
+            <tr><td><code>ngt</code></td><td>Test the running nginx config (<code>nginx -t</code>)</td></tr>
+            <tr><td><code>ngr</code></td><td>Restart the nginx service</td></tr>
+          </tbody>
+        </table>
+      </section>
 
       <section class="tutorial-section">
         <h2>Install</h2>
@@ -90,28 +104,105 @@ source zsh-nginx/zsh-nginx.plugin.zsh</pre>
         <h2>Aliases</h2>
         <table class="example-tbl">
           <tbody>
-            <tr><td><code>ngt</code></td><td><code>sudo nginx -t</code> &mdash; test the running config</td></tr>
-            <tr><td><code>ngr</code></td><td><code>sudo service nginx restart</code> &mdash; restart the service</td></tr>
+            <tr><td><code>ngt</code></td><td><code>$sudo nginx -t</code> &mdash; test the running config for syntax errors</td></tr>
+            <tr><td><code>ngr</code></td><td><code>$sudo service nginx restart</code> &mdash; restart the service</td></tr>
           </tbody>
         </table>
-        <p>If <code>sudo</code> is not on <code>PATH</code> the prefix is dropped automatically.</p>
+        <p>Both aliases are prefixed with <code>$sudo</code>. The entrypoint probes <code>which -p sudo</code> at source time: if <code>sudo</code> is on <code>PATH</code> the prefix is <code>sudo</code>, otherwise it is the empty string and the command runs as the current user. On a systemd-only box where <code>service nginx restart</code> is not wired up, redefine the <code>ngr</code> alias to use <code>systemctl restart nginx</code>.</p>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Functions</h2>
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.2rem 0 0.5rem;">// en NAME</h3>
+        <p>Enables a site by creating <code>ln -s $NGINX_DIR/sites-available/NAME $NGINX_DIR/sites-enabled/NAME</code>. It refuses to run without a name, errors if the config does not exist in <code>sites-available</code>, and reports if the site is already enabled. After the symlink is created it re-checks that the link materialised before printing success. Because it is a symlink (not a copy or move), disabling and re-enabling is lossless.</p>
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.2rem 0 0.5rem;">// dis NAME</h3>
+        <p>Disables a site by <code>rm -f $NGINX_DIR/sites-enabled/NAME</code> &mdash; it removes only the symlink, never the underlying config in <code>sites-available</code>. It requires a name, errors if the site is not currently enabled, and re-checks that the symlink is gone before reporting success.</p>
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.2rem 0 0.5rem;">// vhost [options] NAME</h3>
+        <p>Generates a vhost config from a template and (by default) enables it. The flow: parse flags with <code>getopts</code>, resolve the template, look up the owning user in <code>/etc/passwd</code>, compute a PHP-FPM pool port as <code>"1"</code> + the user's UID, <code>sed</code>-substitute <code>{vhost}</code> / <code>{user}</code> / <code>{pool_port}</code> into the template, move the result into <code>sites-available/NAME</code>, then optionally call <code>en NAME</code> and optionally splice a <code>127.0.0.1 NAME</code> mapping into <code>/etc/hosts</code>.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>-l</code></td><td>List enabled vhosts (<code>ls $NGINX_DIR/sites-enabled</code>) and return &mdash; short-circuits before generation</td></tr>
+            <tr><td><code>-u USER</code></td><td>Set the owning user (default <code>$USER</code>); used for the web root and fastcgi socket, looked up in <code>/etc/passwd</code></td></tr>
+            <tr><td><code>-t TPL</code></td><td>Template to use (default <code>$NGINX_VHOST_TEMPLATE</code>); searched under <code>$ZSH/plugins/nginx/templates/$TPL</code> first, then accepted as a raw path</td></tr>
+            <tr><td><code>-n</code></td><td>Generate only &mdash; skip the trailing <code>en</code> auto-enable</td></tr>
+            <tr><td><code>-w</code></td><td>Write a <code>127.0.0.1 NAME</code> entry into <code>/etc/hosts</code> for local-only resolution</td></tr>
+            <tr><td><code>-h</code></td><td>Print the usage banner and return</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Completion</h2>
+        <p>Each function ships a paired <code>#compdef</code> completion. Candidates come from live filesystem state &mdash; <code>ls -a</code> over the relevant directory piped through an <code>awk</code> filter &mdash; not a hand-maintained list, so a site added by hand outside the plugin still tab-completes.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>en &lt;TAB&gt;</code></td><td>configs in <code>$NGINX_DIR/sites-available</code> (filter <code>/^[a-z][a-z.-]+$/</code>)</td></tr>
+            <tr><td><code>dis &lt;TAB&gt;</code></td><td>configs in <code>$NGINX_DIR/sites-enabled</code> (filter <code>/^[a-z][a-z.-]+$/</code>)</td></tr>
+            <tr><td><code>vhost &lt;TAB&gt;</code></td><td>project directories in <code>$HOME/www</code> (filter <code>/^[^.][a-z0-9._]+$/</code>)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Templates</h2>
+        <p>Two stock vhost templates ship in <code>templates/</code>, both targeting per-user PHP-FPM over a unix-socket fastcgi backend and both denying <code>.ht*</code> dotfiles. Substitution is a single <code>sed</code> pass over three placeholders: <code>{vhost}</code>, <code>{user}</code>, <code>{pool_port}</code>. To add your own, drop a file into <code>$ZSH/plugins/nginx/templates/</code> and select it with <code>vhost -t NAME</code>.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>symfony2</code></td><td>Web root <code>/home/{user}/www/{vhost}/web</code>, front controller <code>app_dev.php</code>, fastcgi scoped to <code>app</code>/<code>app_dev</code>/<code>check</code>.php, <code>client_max_body_size 10M</code>, per-vhost error+access logs</td></tr>
+            <tr><td><code>plain_php</code></td><td>Web root <code>/home/{user}/www/{vhost}</code>, front controller <code>index.php</code>, fastcgi scoped to any <code>.php</code>, per-vhost error+access logs</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="tutorial-section">
         <h2>Configuration</h2>
+        <p>Two environment variables, both with <code>: ${VAR:=default}</code> defaults set at source time (existing values are preserved on re-source).</p>
         <table class="example-tbl">
           <tbody>
-            <tr><td><code>NGINX_DIR</code></td><td>default <code>/etc/nginx</code></td></tr>
-            <tr><td><code>NGINX_VHOST_TEMPLATE</code></td><td>default <code>$ZSH/plugins/nginx/templates/symfony2</code></td></tr>
+            <tr><td><code>NGINX_DIR</code></td><td>Root for <code>sites-available/</code> + <code>sites-enabled/</code> &mdash; default <code>/etc/nginx</code></td></tr>
+            <tr><td><code>NGINX_VHOST_TEMPLATE</code></td><td>Default template when <code>vhost</code> is called without <code>-t</code> &mdash; default <code>$ZSH/plugins/nginx/templates/symfony2</code></td></tr>
           </tbody>
         </table>
       </section>
 
       <section class="tutorial-section">
         <h2>Examples</h2>
-<pre>nginx &lt;TAB&gt;        # tab completion for nginx flags / signals
-ngt                # test running config (sudo nginx -t)
-ngr                # restart service (sudo service nginx restart)</pre>
+<pre>nginx &lt;TAB&gt;            # nginx flags / signals (system completion)
+ngt                    # test running config ($sudo nginx -t)
+ngr                    # restart service ($sudo service nginx restart)
+
+vhost foo              # generate sites-available/foo from the default
+                       #   template and enable it
+vhost foo -w           # ...and also add "127.0.0.1 foo" to /etc/hosts
+vhost foo -t plain_php # use the plain_php template instead
+vhost foo -n           # generate only, do not enable
+vhost foo -u deploy    # own the vhost as user "deploy"
+vhost -l               # list currently enabled vhosts
+vhost -h               # usage banner
+
+en  foo &lt;TAB&gt;          # complete from sites-available
+dis foo &lt;TAB&gt;          # complete from sites-enabled
+
+# full local-dev loop:
+vhost foo -w &amp;&amp; ngt &amp;&amp; ngr</pre>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Troubleshooting</h2>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td>"The name of the vhost is required!"</td><td><code>en</code> / <code>dis</code> / <code>vhost</code> were called without a NAME argument</td></tr>
+            <tr><td>"NAME doesn't exist"</td><td><code>en</code> &mdash; no matching config in <code>$NGINX_DIR/sites-available</code>; create it (e.g. with <code>vhost</code>) first</td></tr>
+            <tr><td>"NAME is already enabled"</td><td><code>en</code> &mdash; the <code>sites-enabled</code> symlink already exists; nothing to do</td></tr>
+            <tr><td>"User USER doesn't have an account"</td><td><code>vhost</code> &mdash; the <code>-u</code> user is not in <code>/etc/passwd</code></td></tr>
+            <tr><td>Permission denied on <code>/etc/nginx</code></td><td><code>sudo</code> was not found on <code>PATH</code> at source time, so the prefix is empty; run as root or install <code>sudo</code></td></tr>
+            <tr><td><code>ngr</code> fails on a systemd box</td><td>redefine <code>ngr</code> to use <code>systemctl restart nginx</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tutorial-section">
+        <p>Deeper internals &mdash; LOC breakdown, the vhost pipeline diagram, test coverage and design decisions &mdash; are in the <a href="report.html">Engineering Report</a>.</p>
       </section>
 
       <section class="tutorial-section">
