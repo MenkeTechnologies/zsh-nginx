@@ -96,7 +96,6 @@
         <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Vhost Templates</div></div>
         <div class="stat-card"><div class="stat-val green">28</div><div class="stat-label">zunit @test Cases</div></div>
         <div class="stat-card"><div class="stat-val">21</div><div class="stat-label">Docs/Repo Gates</div></div>
-        <div class="stat-card"><div class="stat-val">34</div><div class="stat-label">Git Commits</div></div>
       </div>
 
       <div style="margin:1.2rem 0;">
@@ -224,7 +223,7 @@
   │ (verify + reload)       │
   └─────────────────────────┘</pre>
 
-      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The pool-port trick (<code>pool_port = "1" + UID</code>) is the canonical multi-tenant PHP-FPM convention: each user gets a fastcgi socket on their own port, derived from <code>/etc/passwd</code> UID. UID 1000 &rarr; pool 11000, UID 1001 &rarr; 11001, etc. The template emits the literal <code>unix:/var/run/php5-fpm.{user}.socket</code> string &mdash; the pool_port is substituted in for templates that use it.</p>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The pool-port trick (<code>pool_port = "1" + UID</code>) derives a per-user port from the <code>/etc/passwd</code> UID (UID 1000 &rarr; 11000, UID 1001 &rarr; 11001). Neither stock template references <code>{pool_port}</code>; both emit the literal <code>unix:/var/run/php5-fpm.{user}.socket</code> string, so the value is only used by custom templates that contain the placeholder.</p>
 
       <hr class="section-rule">
 
@@ -296,7 +295,7 @@
         <div class="feature-card"><h4>Debian/Ubuntu layout, not Red Hat</h4><p>The <code>sites-available/</code> + <code>sites-enabled/</code> split is a Debian convention &mdash; Red Hat puts every config in <code>/etc/nginx/conf.d/</code>. The plugin standardises on the Debian layout because that's where the symlink semantics make sense; <code>en</code>/<code>dis</code> have nothing useful to do on a flat conf.d setup.</p></div>
         <div class="feature-card"><h4>Symlink, not move</h4><p><code>en</code> creates a <code>ln -s</code>, not a <code>cp</code> or <code>mv</code>. <code>dis</code> is <code>rm -f</code> against the symlink, not the underlying config. This means <code>dis</code> never destroys the actual file; the user can <code>en</code> again to instantly restore.</p></div>
         <div class="feature-card"><h4>sed templating</h4><p>3 placeholders, sed-substituted in a single pass. A real templating language would force a tool dep that may not be on the user's nginx host. <code>sed</code> is POSIX, and the 3-key surface is small enough that escaping concerns don't bite.</p></div>
-        <div class="feature-card"><h4>UID-derived pool port</h4><p><code>pool_port = "1" + UID</code> via <code>/etc/passwd</code> lookup. Avoids hand-assigning per-user PHP-FPM ports; the port is deterministic from the system's user database, so two users on the same box can't collide.</p></div>
+        <div class="feature-card"><h4>UID-derived pool port</h4><p><code>pool_port = "1" + UID</code> via <code>/etc/passwd</code> lookup. For custom templates that use <code>{pool_port}</code>, avoids hand-assigning per-user PHP-FPM ports; the port is deterministic from the system's user database.</p></div>
         <div class="feature-card"><h4>Completion from filesystem</h4><p>Every <code>#compdef</code> reads <code>ls -a</code> against the relevant directory rather than maintaining a static list. A vhost added by hand outside the plugin still tab-completes; the plugin can never lie about what's actually installed.</p></div>
         <div class="feature-card"><h4>Optional sudo</h4><p>The entrypoint probes for sudo (<code>which -p sudo</code>) and falls back to empty string when missing. Containers, embedded systems, and root-shells get a working plugin without the sudo prefix; default Linux desktops get the elevation they need to touch <code>/etc/nginx</code>.</p></div>
         <div class="feature-card"><h4>Two templates</h4><p>One is the historical Symfony 2 layout (web/ root, fastcgi scoped to entry scripts), one is generic PHP (any .php executes). Together they cover the dominant LAMP / Symfony deployment shapes circa the plugin's origin. A user with another framework can drop a custom template into <code>$ZSH/plugins/nginx/templates/</code> and select it with <code>-t</code>.</p></div>
@@ -338,13 +337,13 @@
       <!-- SECTION 10: STRATEGIC POSITION          -->
       <!-- ═══════════════════════════════════════ -->
       <h2 class="tutorial-title"><span class="step-hash">!</span>STRATEGIC POSITION</h2>
-      <p class="tutorial-subtitle">zsh-nginx is the smallest plugin in the MenkeTechnologies stack but covers a real ops loop: "I want a new local vhost on this dev box, now." Without the plugin, the same loop is ~5 hand-typed commands across <code>cd /etc/nginx/sites-available</code>, <code>sudo cp template foo</code>, <code>sudo vim foo</code>, <code>sudo ln -s ../sites-available/foo ../sites-enabled/foo</code>, and <code>sudo service nginx restart</code>. With the plugin it's <code>vhost foo -w &amp;&amp; ngt &amp;&amp; ngr</code> &mdash; same outcome, three commands, no manual sed.</p>
+      <p class="tutorial-subtitle">zsh-nginx is a small plugin that covers a real ops loop: "I want a new local vhost on this dev box, now." Without the plugin, the same loop is ~5 hand-typed commands across <code>cd /etc/nginx/sites-available</code>, <code>sudo cp template foo</code>, <code>sudo vim foo</code>, <code>sudo ln -s ../sites-available/foo ../sites-enabled/foo</code>, and <code>sudo service nginx restart</code>. With the plugin it's <code>vhost foo -w &amp;&amp; ngt &amp;&amp; ngr</code> &mdash; same outcome, three commands, no manual sed.</p>
 
       <div class="mapping-grid">
         <div class="mapping-card"><h4>Dev workflow</h4><p>Spin up a vhost for a project in <code>~/www/foo</code>: <code>vhost foo -w</code> generates the config, enables it, and writes <code>127.0.0.1 foo</code> to <code>/etc/hosts</code>. <code>ngt</code> + <code>ngr</code> reload.</p></div>
-        <div class="mapping-card"><h4>Multi-tenant servers</h4><p>The UID-derived pool port + per-user fastcgi socket convention scales to dozens of users on a shared host without port collisions or hand-maintained pool mappings.</p></div>
+        <div class="mapping-card"><h4>Multi-tenant servers</h4><p>The stock templates point each vhost at a per-user PHP-FPM unix socket derived from <code>{user}</code>; custom templates can also use the UID-derived <code>{pool_port}</code>.</p></div>
         <div class="mapping-card"><h4>CI / provisioning</h4><p>The plugin is a thin shim over <code>ln -s</code> + <code>sed</code> &mdash; safe to call from provisioning scripts. <code>en</code>/<code>dis</code> are idempotent by construction (the symlink either exists or it doesn't).</p></div>
-        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of 5 plugins in the MenkeTechnologies meta repo; the lightest in LOC but the one with the most external system touch (nginx config, <code>/etc/hosts</code>, <code>/etc/passwd</code>, service control).</p></div>
+        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of the plugins in the MenkeTechnologies meta repo; among the smallest in LOC but the one with the most external system touch (nginx config, <code>/etc/hosts</code>, <code>/etc/passwd</code>, service control).</p></div>
       </div>
 
     </main>
