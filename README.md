@@ -27,6 +27,7 @@
 - [\[0x00\] Install for Zinit](#0x00-install-for-zinit)
 - [\[0x01\] Install for Oh My Zsh](#0x01-install-for-oh-my-zsh)
 - [\[0x02\] General Install](#0x02-general-install)
+- [\[0x03\] Commands](#0x03-commands)
 
 ---
 
@@ -53,3 +54,28 @@ git clone https://github.com/MenkeTechnologies/zsh-nginx.git
 ```
 
 source zsh-nginx.plugin.zsh or add code to zshrc or any startup script
+
+
+## [0x03] Commands
+
+Aliases:
+
+| Alias | Expands to |
+| --- | --- |
+| `ngt` | `nginx -t` (via `sudo` when available) |
+| `ngr` | `service nginx restart` (via `sudo` when available) |
+
+Functions (autoloaded from `autoload/`; completions in `src/`):
+
+| Command | Description |
+| --- | --- |
+| `en NAME` | Symlink `sites-available/NAME` into `sites-enabled/` |
+| `dis NAME` | Remove `sites-enabled/NAME` |
+| `vhost [-l] [-u USER] [-t TEMPLATE] [-n] [-w] [-h] NAME` | Generate `sites-available/NAME` from a template and enable it. `-l` lists enabled vhosts, `-n` skips enabling, `-w` appends NAME to the first line of `/etc/hosts`, `-h` prints usage |
+
+Variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NGINX_DIR` | `/etc/nginx` | nginx configuration directory |
+| `NGINX_VHOST_TEMPLATE` | `$ZSH/plugins/nginx/templates/symfony2` | Default vhost template; `-t` selects another from `$ZSH/plugins/nginx/templates/` or a file path |
